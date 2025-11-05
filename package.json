@@ -1,5 +1,6 @@
 {
     "name": "mate-dating-app",
+    "homepage": "https://akanksha333-111.github.io/Mate/",
     "version": "0.1.0",
     "private": true,
     "dependencies": {
@@ -59,6 +60,9 @@
     },
     "scripts": {
         "dev": "vite",
-        "build": "vite build"
+        "build": "vite build",
+        "preview": "vite preview",
+        "predeploy": "npm run build",
+        "deploy": "gh-pages -d dist"
     }
 }
