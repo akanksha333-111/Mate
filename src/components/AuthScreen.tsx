@@ -19,6 +19,14 @@ export function AuthScreen({ onComplete }: AuthScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
+  // Auto-dismiss google error after a short delay to avoid persistent UI noise
+  useEffect(() => {
+    if (!googleError) return;
+    const tid = window.setTimeout(() => setGoogleError(null), 4000);
+    return () => clearTimeout(tid);
+  }, [googleError]);
 
   const submit = (via: 'email' | 'google') => {
     // For email flows, require valid email format
@@ -44,9 +52,11 @@ export function AuthScreen({ onComplete }: AuthScreenProps) {
 
       setLoading(true);
       setMessage('Opening Google...');
+      setGoogleError(null);
       const popup = window.open(oauthUrl, 'googleAuth', 'width=600,height=700');
       if (!popup) {
-        setMessage('Popup blocked. Please allow popups and try again.');
+        // show a short, user-facing error under the Google button
+        setGoogleError(mode === 'login' ? 'Login with Google failed' : 'Sign Up with Google failed');
         setLoading(false);
         return;
       }
@@ -58,6 +68,7 @@ export function AuthScreen({ onComplete }: AuthScreenProps) {
           window.removeEventListener('message', onMessage);
           try { popup.close(); } catch (e) {}
           setMessage('Proceeding securely...');
+          setGoogleError(null);
           setTimeout(() => { setLoading(false); setMessage(''); onComplete(); }, 900);
         }
       };
@@ -68,11 +79,12 @@ export function AuthScreen({ onComplete }: AuthScreenProps) {
       const closedInterval = window.setInterval(() => {
         try {
           if (popup.closed) {
-            clearInterval(closedInterval);
-            window.removeEventListener('message', onMessage);
-            setLoading(false);
-            setMessage('Popup closed. Sign in was not completed.');
-          }
+              clearInterval(closedInterval);
+              window.removeEventListener('message', onMessage);
+              setLoading(false);
+              // mark google auth as failed for the current mode
+              setGoogleError(mode === 'login' ? 'Login with Google failed, try again' : 'Sign Up with Google failed, try again');
+            }
         } catch (e) {
           // ignore
         }
@@ -94,7 +106,12 @@ export function AuthScreen({ onComplete }: AuthScreenProps) {
     }, 1400);
   };
 
-  const passwordValid = password.length >= 6;
+  // Password rule: 8+ chars, uppercase, lowercase, number, special char
+  const passwordRule = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+  // Require the strong rule for both signup and login so Sign In is disabled when format is incorrect
+  const passwordValid = passwordRule.test(password);
+  // In login screen we show a warning if the entered password doesn't match the strong format
+  const loginPasswordPoorFormat = mode === 'login' && password.length > 0 && !passwordRule.test(password);
   const passwordsMatch = mode === 'login' ? true : password === confirmPassword;
   const emailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   const emailValid = emailRegex.test(email);
@@ -145,6 +162,10 @@ export function AuthScreen({ onComplete }: AuthScreenProps) {
               <Input placeholder="Password" type="password" value={password} onChange={(e:any) => setPassword(e.target.value)} />
             </div>
 
+            {loginPasswordPoorFormat && (
+              <div className="mt-2 text-sm text-red-600">Incorrect password format or Wrong password</div>
+            )}
+
             {mode === 'login' && (
               <div className="flex justify-end mt-2">
                 <button onClick={() => { setForgotMode(true); setForgotEmail(email); }} className="text-sm text-[#DC143C] hover:underline">Forgot password?</button>
@@ -156,7 +177,9 @@ export function AuthScreen({ onComplete }: AuthScreenProps) {
                 <Input placeholder="Confirm password" type="password" value={confirmPassword} onChange={(e:any) => setConfirmPassword(e.target.value)} />
                 <div className="mt-1 text-sm">
                   {!passwordValid && password.length > 0 && (
-                    <div className="text-red-600">Password must be at least 6 characters</div>
+                    <div className="text-red-600">
+                      Password must be at least 8 characters and include uppercase, lowercase, number, and special character
+                    </div>
                   )}
                   {passwordValid && confirmPassword.length > 0 && !passwordsMatch && (
                     <div className="text-red-600">Passwords do not match</div>
@@ -215,6 +238,9 @@ export function AuthScreen({ onComplete }: AuthScreenProps) {
               <LogIn size={18} />
               <span>{mode === 'login' ? 'Continue with Google' : 'Sign up with Google'}</span>
             </button>
+            {googleError && (
+              <div className="mt-2 text-center text-sm text-red-600">{googleError}</div>
+            )}
           </div>
 
           {/* message display removed — status shown on buttons only */}
